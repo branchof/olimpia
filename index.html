@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lector de PDF de Partidos</title>
+    <link rel="shortcut icon" href="https://bgplus.com.ar/olimpia/static/LogoOlimpia.png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+	<meta name="theme-color" content="#1a1a1a">
+</head>
+<body>
+
+    <div class="container">
+        <img src="{{ url_for('static', filename='LogoOlimpia.png') }}" alt="Logo Club Olimpia" class="club-logo">
+		
+		<h1>Subir PDF del Partido</h1>
+
+        <input type="file" id="pdfFile" accept=".pdf">
+        <button onclick="uploadPdf()">Procesar PDF</button>
+
+        <div id="loading" class="hidden">Cargando...</div>
+        <div id="error" class="hidden error-message"></div>
+
+        <div id="match-info" class="hidden">
+            <h2>Información del Partido</h2>
+            <div class="info-item">
+                <i class="fas fa-calendar-alt icon"></i>
+                <span class="label">Fecha:</span>
+                <span id="info-fecha"></span>
+                <i class="fas fa-calendar-plus icon-action" id="google-calendar-icon" title="Agendar en Google Calendar"></i>
+            </div>
+            <div class="info-item">
+                <i class="fas fa-clock icon"></i>
+                <span class="label">Hora:</span>
+                <span id="info-hora"></span>
+            </div>
+            <div class="info-item">
+                <i class="fas fa-futbol icon"></i>
+                <span class="label">Cancha:</span>
+                <span id="info-cancha"></span>
+            </div>
+            <div class="info-item">
+                <i class="fas fa-users icon"></i>
+                <span class="label">Vs:</span>
+                <span id="info-vs"></span>
+            </div>
+			<div class="info-item">
+                <i class="fas fa-map-marker-alt icon"></i> <span class="label">Dirección:</span>
+                <span id="info-direccion"></span>
+
+                <div class="maps-link-container">
+                    <i class="fas fa-map-marked-alt icon"></i> <a href="#" id="google-maps-link" target="_blank" class="action-link">Ver en Google Maps</a>
+                </div>
+            </div>            <div class="info-item">
+                <i class="fas fa-dollar-sign icon"></i>
+                <span class="label">Entrada:</span>
+                <span id="info-entrada"></span>
+            </div>
+
+            <button id="whatsapp-share-button">
+                <i class="fab fa-whatsapp icon"></i> Compartir por WhatsApp
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const pdfFile1 = document.getElementById('pdfFile');
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+        const matchInfoDiv = document.getElementById('match-info');
+
+        const infoFecha = document.getElementById('info-fecha');
+        const infoHora = document.getElementById('info-hora');
+        const infoCancha = document.getElementById('info-cancha');
+        const infoVs = document.getElementById('info-vs');
+        const infoDireccion = document.getElementById('info-direccion');
+        const infoEntrada = document.getElementById('info-entrada');
+
+        const googleMapsLink = document.getElementById('google-maps-link');
+        const whatsappShareButton = document.getElementById('whatsapp-share-button');
+        const googleCalendarIcon = document.getElementById('google-calendar-icon');
+
+
+        function showLoading(isLoading) {
+            loadingDiv.classList.toggle('hidden', !isLoading);
+        }
+
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.classList.toggle('hidden', !message);
+        }
+
+        function showMatchInfo(isVisible) {
+            matchInfoDiv.classList.toggle('hidden', !isVisible);
+        }
+
+        function uploadPdf() {
+            const file = pdfFile1.files[0];
+            if (!file) {
+                showError('Por favor, selecciona un archivo PDF.');
+                return;
+            }
+
+            showLoading(true);
+            showError('');
+            showMatchInfo(false);
+
+            const formData = new FormData();
+            formData.append('pdfFile', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                showLoading(false);
+                if (!response.ok) {
+                    // Si la respuesta no es OK (ej: 400, 500), intentamos leer el JSON de error
+                    return response.json().then(data => {
+                        throw new Error(data.error || `Error HTTP: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                } else {
+                    // Mostrar la información
+                    infoFecha.textContent = data.fecha;
+                    infoHora.textContent = data.hora;
+                    infoCancha.textContent = data.cancha;
+                    infoVs.textContent = data.vs;
+                    infoDireccion.textContent = data.direccion;
+                    infoEntrada.textContent = `$${data.entrada}`; // Mostrar con el signo $
+
+                    // --- Generar enlaces y botones ---
+
+                    // 1. Google Maps Link
+                    const encodedAddress = encodeURIComponent(data.direccion);
+                    // Formato de URL más común para buscar dirección en Google Maps
+                    googleMapsLink.href = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                    googleMapsLink.textContent = 'Ver en Google Maps'; // Aseguramos el texto del enlace
+
+                    // 2. WhatsApp Share Button
+                    // Obtener la URL completa de Google Maps generada
+                    const mapsUrl = googleMapsLink.href;
+
+                    // Construir el texto a compartir por WhatsApp
+                    const shareText = `¡Partido Confirmado!%0A%0A` +
+                                     `📅 Fecha: ${data.fecha}%0A` +
+                                     `⏰ Hora: ${data.hora}%0A` +
+                                     `🏟️ Cancha: ${data.cancha}%0A` +
+                                     `🆚 Vs: ${data.vs}%0A` +
+                                     `📍 Dirección: ${data.direccion}%0A` +
+                                     `🗺️ En Google Maps: ${mapsUrl}%0A` + // <-- Incluimos la URL de Maps aquí con un icono
+                                     `🎟️ Entrada: $${data.entrada}%0A%0A`; // %0A es salto de línea en URL
+
+                    whatsappShareButton.onclick = () => {
+                        // Usamos encodeURIComponent para codificar todo el texto antes de pasarlo a la URL
+                        const finalShareUrl = `whatsapp://send?text=${encodeURIComponent(shareText)}`;
+                        window.open(finalShareUrl, '_blank');
+                    };
+
+                    // 3. Google Calendar Icon
+                    const fechaParts = data.fecha.match(/\d{2}\/\d{2}\/\d{4}/); // Buscar el patrón DD/MM/YYYY
+                    let calendarDates = ''; // Usaremos este formato YYYYMMDD o YYYYMMDDTHHMMSS/YYYYMMDDTHHMMSS
+
+                    if (fechaParts) {
+                        const [day, month, year] = fechaParts[0].split('/');
+                        const horaParts = data.hora.match(/\d{2}:\d{2}/);
+                        let calendarTime = '000000'; // Default midnight in HHMMSS format
+
+                        if (horaParts) {
+                            const [hour, minute] = horaParts[0].split(':');
+                            calendarTime = `${hour}${minute}00`; // HHMMSS
+                             // Formato completo si tenemos hora
+                            calendarDates = `${year}${month}${day}T${calendarTime}`;
+                             // Para un evento de 1 hora: /YYYYMMDDTHHMMSS+1hour
+                             // Simple: solo la fecha/hora de inicio
+                        } else {
+                             // Solo formato de fecha si la hora no se encontró
+                            calendarDates = `${year}${month}${day}`;
+                        }
+                    }
+
+                    const calendarTitle = encodeURIComponent(`Partido vs ${data.vs}`);
+                    const calendarDetails = encodeURIComponent(
+                        `Cancha: ${data.cancha}\n` +
+                        `Hora: ${data.hora}\n` + // Incluir la hora en la descripción también
+                        `Entrada: $${data.entrada}\n` +
+                        `Dirección: ${data.direccion}\n` +
+                        `Ver en Maps: ${mapsUrl}` // Incluir link de Maps en la descripción
+                    );
+                    const calendarLocation = encodeURIComponent(data.direccion);
+
+                    googleCalendarIcon.onclick = () => {
+                         if (calendarDates) {
+                             // Construir la URL base del evento de Google Calendar
+                             let calendarUrl = `https://www.google.com/calendar/render?action=TEMPLATE&text=${calendarTitle}`;
+
+                             // Añadir fechas/horas. Si solo tenemos fecha (YYYYMMDD), el formato es dates=YYYYMMDD/YYYYMMDD
+                             // Si tenemos fecha y hora (YYYYMMDDTHHMMSS), el formato es dates=YYYYMMDDTHHMMSS/YYYYMMDDTHHMMSS
+                             // Google Calendar es bastante flexible, usar el mismo string para inicio y fin funciona para eventos puntuales.
+                             calendarUrl += `&dates=${calendarDates}/${calendarDates}`;
+
+                             calendarUrl += `&details=${calendarDetails}`;
+                             calendarUrl += `&location=${calendarLocation}`;
+
+                             window.open(calendarUrl, '_blank');
+
+                         } else {
+                              alert('No se pudo agendar en Google Calendar: Fecha no encontrada.');
+                         }
+                    };
+
+
+                    showMatchInfo(true);
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                showError(`Error al procesar: ${error.message}`);
+                console.error('Error:', error);
+            });
+        }
+
+    </script>
+</body>
+</html>
